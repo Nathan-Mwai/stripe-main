@@ -1,13 +1,17 @@
 const express = require("express");
 const app = express();
 const { resolve } = require("path");
-// Replace if using a different env file or config
 const env = require("dotenv").config({ path: "./.env" });
+const cors = require("cors");
 
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: "2024-12-18",
-});
+app.use(express.json());
 
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+
+app.use(cors({
+    origin: "*",
+}));
 
 app.get("/config", (req, res) => {
     res.send({
@@ -21,16 +25,23 @@ app.get("/", (req, res) => {
 })
 
 app.post("/create-payment-intent", async (req, res) => {
-    const { amount, currency } = req.body;
+    const { amount } = req.body;
 
-    if (!amount || !currency) {
-        return res.status(400).send({ error: "Amount and currency are required" });
+    const amountNum = Number(amount);
+
+    if (!amountNum) {
+        return res.status(400).send({ error: "Amount is required" });
     }
+
+    if (isNaN(amountNum) || amountNum <= 0) {
+        return res.status(400).send({ error: "Amount must be a positive number" });
+    }
+
 
     try {
         const paymentIntent = await stripe.paymentIntents.create({
-            amount,
-            currency,
+            amount: amountNum,
+            currency: "kes",
             automatic_payment_methods: { enabled: true },
         });
 
@@ -38,10 +49,32 @@ app.post("/create-payment-intent", async (req, res) => {
             clientSecret: paymentIntent.client_secret,
         });
     } catch (e) {
+        console.error("Stripe error:", e);
         res.status(400).send({ error: { message: e.message } });
     }
 });
 
+
+// app.post("/create-payment-intent", async (req, res) => {
+//   try {
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       currency: "EUR",
+//       amount: 1999,
+//       automatic_payment_methods: { enabled: true },
+//     });
+
+//     // Send publishable key and PaymentIntent details to client
+//     res.send({
+//       clientSecret: paymentIntent.client_secret,
+//     });
+//   } catch (e) {
+//     return res.status(400).send({
+//       error: {
+//         message: e.message,
+//       },
+//     });
+//   }
+// });
 
 app.listen(5252, () =>
     console.log(`Node server listening at http://localhost:5252`)
